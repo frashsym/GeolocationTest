@@ -10,23 +10,51 @@ function App() {
     const imageSrc = webcamRef.current.getScreenshot();
     setPhoto(imageSrc);
 
-    // Mengatur opsi untuk permintaan geolocation
     const options = {
       enableHighAccuracy: true,
-      timeout: 15000, // timeout setelah 15 detik
-      maximumAge: 0, // data tidak di-cache
+      timeout: 60000,
+      maximumAge: 0,
     };
+
+    let bestPosition = null;
+
+    const stopWatching = () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+
+        if (!bestPosition || accuracy < bestPosition.coords.accuracy) {
+          bestPosition = position;
+          setLocation({ lat: latitude, long: longitude });
+        }
+      },
+      (error) => {
+        console.error("Error watching location:", error.message);
+      },
+      options
+    );
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const { latitude, longitude } = position.coords;
-        setLocation({ lat: latitude, long: longitude });
+        const { latitude, longitude, accuracy } = position.coords;
+
+        if (!bestPosition || accuracy < bestPosition.coords.accuracy) {
+          bestPosition = position;
+          setLocation({ lat: latitude, long: longitude });
+        }
+
+        stopWatching();
       },
       (error) => {
-        console.error("Error getting location:", error.message);
+        console.error("Error getting current location:", error.message);
       },
-      options // menggunakan opsi yang telah ditetapkan
+      options
     );
+
+    setTimeout(stopWatching, options.timeout);
   };
 
   const handleSubmit = async () => {
