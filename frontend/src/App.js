@@ -6,58 +6,84 @@ function App() {
   const [location, setLocation] = useState({ lat: null, long: null });
   const [photo, setPhoto] = useState(null);
 
-  const capture = () => {
-    const imageSrc = webcamRef.current.getScreenshot();
-    setPhoto(imageSrc);
+  const capturePhoto = () => {
+    if (webcamRef.current) {
+      const imageSrc = webcamRef.current.getScreenshot();
+      setPhoto(imageSrc);
+    } else {
+      console.error("Webcam tidak tersedia");
+    }
+  };
 
-    const options = {
-      enableHighAccuracy: true,
-      timeout: 60000,
-      maximumAge: 0,
-    };
+  const captureLocation = () => {
+    if ("geolocation" in navigator) {
+      const options = {
+        enableHighAccuracy: true,
+        timeout: 60000,
+        maximumAge: 0,
+      };
 
-    let bestPosition = null;
+      let bestPosition = null;
 
-    const stopWatching = () => {
-      navigator.geolocation.clearWatch(watchId);
-    };
+      const stopWatching = (watchId) => {
+        navigator.geolocation.clearWatch(watchId);
+      };
 
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude, accuracy } = position.coords;
+          console.log(
+            `Watch position: lat=${latitude}, long=${longitude}, accuracy=${accuracy}`
+          );
 
-        if (!bestPosition || accuracy < bestPosition.coords.accuracy) {
-          bestPosition = position;
-          setLocation({ lat: latitude, long: longitude });
-        }
-      },
-      (error) => {
-        console.error("Error watching location:", error.message);
-      },
-      options
-    );
+          if (!bestPosition || accuracy < bestPosition?.coords?.accuracy) {
+            bestPosition = position;
+            setLocation({ lat: latitude, long: longitude });
+          }
+        },
+        (error) => {
+          console.error("Error watching location:", error.message);
+        },
+        options
+      );
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude, accuracy } = position.coords;
+          console.log(
+            `Current position: lat=${latitude}, long=${longitude}, accuracy=${accuracy}`
+          );
 
-        if (!bestPosition || accuracy < bestPosition.coords.accuracy) {
-          bestPosition = position;
-          setLocation({ lat: latitude, long: longitude });
-        }
+          if (!bestPosition || accuracy < bestPosition?.coords?.accuracy) {
+            bestPosition = position;
+            setLocation({ lat: latitude, long: longitude });
+          }
 
-        stopWatching();
-      },
-      (error) => {
-        console.error("Error getting current location:", error.message);
-      },
-      options
-    );
+          stopWatching(watchId);
+        },
+        (error) => {
+          console.error("Error getting current location:", error.message);
+        },
+        options
+      );
 
-    setTimeout(stopWatching, options.timeout);
+      setTimeout(() => stopWatching(watchId), options.timeout);
+    } else {
+      console.error("Geolocation tidak didukung oleh browser ini.");
+    }
+  };
+
+  const capturePhotoAndLocation = () => {
+    capturePhoto();
+    captureLocation();
   };
 
   const handleSubmit = async () => {
+    if (!photo || !location.lat || !location.long) {
+      console.error("Foto atau data lokasi tidak lengkap");
+      return;
+    }
+
     const response = await fetch("http://localhost:5000/absensi", {
       method: "POST",
       headers: {
@@ -72,13 +98,17 @@ function App() {
   return (
     <div>
       <Webcam audio={false} ref={webcamRef} screenshotFormat="image/jpeg" />
-      <button onClick={capture}>Ambil Foto</button>
+      <button onClick={capturePhotoAndLocation}>Capture</button>
       {photo && (
         <div>
           <img src={photo} alt="Foto Karyawan" />
+        </div>
+      )}
+      {location.lat && location.long && (
+        <div>
           <p>Latitude: {location.lat}</p>
           <p>Longitude: {location.long}</p>
-          <button onClick={handleSubmit}>Kirim Data</button>
+          {photo && <button onClick={handleSubmit}>Kirim Data</button>}
         </div>
       )}
     </div>
