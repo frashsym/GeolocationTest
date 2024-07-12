@@ -25,7 +25,7 @@ db.connect((err) => {
 });
 
 app.post("/absensi", (req, res) => {
-  const { photo, location } = req.body;
+  const { photo, location, formattedDate, formattedTime } = req.body;
   const photoName = `${uuidv4()}.jpeg`; // Buat nama file foto yang unik
 
   // Simpan foto ke dalam folder 'uploads'
@@ -37,11 +37,15 @@ app.post("/absensi", (req, res) => {
 
     // Simpan data ke database
     const sql =
-      "INSERT INTO absen (photo, latitude, longitude) VALUES (?, ?, ?)";
-    db.query(sql, [photoName, location.lat, location.long], (err, result) => {
-      if (err) throw err;
-      res.json({ message: "Data absensi diterima dan disimpan ke database" });
-    });
+      "INSERT INTO absen (photo, latitude, longitude, tanggal, jam) VALUES (?, ?, ?, ?, ?)";
+    db.query(
+      sql,
+      [photoName, location.lat, location.long, formattedDate, formattedTime],
+      (err, result) => {
+        if (err) throw err;
+        res.json({ message: "Data absensi diterima dan disimpan ke database" });
+      }
+    );
   });
 });
 

@@ -1,11 +1,15 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import Webcam from "react-webcam";
+import "./App.css";
 
 function App() {
   const webcamRef = useRef(null);
   const [location, setLocation] = useState({ lat: null, long: null });
   const [photo, setPhoto] = useState(null);
   const [editedPhoto, setEditedPhoto] = useState(null);
+  const [formattedDate, setFormattedDate] = useState("");
+  const [formattedTime, setFormattedTime] = useState("");
+  const [isFrontCamera, setIsFrontCamera] = useState(true);
 
   const capturePhoto = () => {
     if (webcamRef.current) {
@@ -33,10 +37,6 @@ function App() {
       const watchId = navigator.geolocation.watchPosition(
         (position) => {
           const { latitude, longitude, accuracy } = position.coords;
-          console.log(
-            `Watch position: lat=${latitude}, long=${longitude}, accuracy=${accuracy}`
-          );
-
           if (!bestPosition || accuracy < bestPosition?.coords?.accuracy) {
             bestPosition = position;
             setLocation({ lat: latitude, long: longitude });
@@ -51,15 +51,10 @@ function App() {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude, accuracy } = position.coords;
-          console.log(
-            `Current position: lat=${latitude}, long=${longitude}, accuracy=${accuracy}`
-          );
-
           if (!bestPosition || accuracy < bestPosition?.coords?.accuracy) {
             bestPosition = position;
             setLocation({ lat: latitude, long: longitude });
           }
-
           stopWatching(watchId);
         },
         (error) => {
@@ -74,11 +69,6 @@ function App() {
     }
   };
 
-  const capturePhotoAndLocation = () => {
-    capturePhoto();
-    captureLocation();
-  };
-
   const editPhoto = () => {
     if (!photo || !location.lat || !location.long) {
       console.error("Foto atau data lokasi tidak lengkap");
@@ -88,17 +78,16 @@ function App() {
     const img = new Image();
     img.src = photo;
     img.onload = () => {
-      console.log("Foto sedang diedit");
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
 
-      canvas.width = img.width;
-      canvas.height = img.height;
+      const scaleFactor = 0.8; // Mengubah ukuran elemen dalam foto
+      canvas.width = img.width * scaleFactor;
+      canvas.height = img.height * scaleFactor;
 
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      // Draw the text and logo
-      ctx.font = "bold 20px Arial";
+      ctx.font = "bold 16px Arial"; // Ukuran font lebih kecil
       ctx.fillStyle = "white";
       ctx.textAlign = "left";
 
@@ -115,32 +104,57 @@ function App() {
         second: "2-digit",
       });
 
-      const text = `Lat: ${location.lat}, Long: ${location.long}\n${formattedDate}, ${formattedTime}`;
-      const lineHeight = 25;
-      const x = 10;
-      let y = canvas.height - 70;
+      setFormattedDate(formattedDate);
+      setFormattedTime(formattedTime);
+
+      const text = `${location.lat}, ${location.long}\n${formattedDate}, ${formattedTime}`;
+      const lineHeight = 20; // Tinggi baris lebih kecil
+      const padding = 8;
+      const logoWidth = 40; // Lebar logo lebih kecil
+      const logoHeight = 40; // Tinggi logo lebih kecil
+      const textX = logoWidth + padding * 2;
+
+      const backgroundHeight =
+        Math.max(logoHeight, lineHeight * 2) + padding * 2;
+      const backgroundY = canvas.height - backgroundHeight;
 
       ctx.fillStyle = "black";
-      ctx.fillRect(0, canvas.height - 100, canvas.width, 100);
+      ctx.fillRect(0, backgroundY, canvas.width, backgroundHeight);
+
       ctx.fillStyle = "white";
+      let y = backgroundY + padding + lineHeight;
 
       text.split("\n").forEach((line) => {
-        ctx.fillText(line, x, y);
+        ctx.fillText(line, textX, y);
         y += lineHeight;
       });
 
-      // Draw the logo
       const logo = new Image();
-      logo.src = "img/GMT-no-bg.png"; // Path to your logo image
+      logo.src = "img/GMT-no-bg.png";
       logo.onload = () => {
-        const logoWidth = 50;
-        const logoHeight = 50;
-        ctx.drawImage(logo, 10, canvas.height - 90, logoWidth, logoHeight);
+        ctx.drawImage(
+          logo,
+          padding,
+          backgroundY + (backgroundHeight - logoHeight) / 2,
+          logoWidth,
+          logoHeight
+        );
 
         const editedImage = canvas.toDataURL("image/jpeg");
         setEditedPhoto(editedImage);
       };
     };
+  };
+
+  useEffect(() => {
+    if (photo && location.lat && location.long) {
+      editPhoto();
+    }
+  }, [photo, location]);
+
+  const capturePhotoAndLocation = async () => {
+    capturePhoto();
+    captureLocation();
   };
 
   const handleSubmit = async () => {
@@ -154,32 +168,69 @@ function App() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ photo: editedPhoto, location }),
+      body: JSON.stringify({
+        photo: editedPhoto,
+        location,
+        formattedDate,
+        formattedTime,
+      }),
     });
     const data = await response.json();
     console.log(data);
   };
 
+  const toggleCamera = () => {
+    setIsFrontCamera((prev) => !prev);
+  };
+
+  const videoConstraints = {
+    width: 1280,
+    height: 720,
+    facingMode: isFrontCamera ? "user" : { exact: "environment" },
+  };
+
   return (
-    <div>
-      <Webcam audio={false} ref={webcamRef} screenshotFormat="image/jpeg" />
-      <button onClick={capturePhotoAndLocation}>Capture</button>
-      {photo && (
-        <div>
-          <img src={photo} alt="Foto Karyawan" />
-          <button onClick={editPhoto}>Edit Photo</button>
-        </div>
-      )}
+    <div className="app-container">
+      <Webcam
+        audio={false}
+        ref={webcamRef}
+        screenshotFormat="image/jpeg"
+        videoConstraints={videoConstraints}
+        style={{
+          transform: isFrontCamera ? "scaleX(-1)" : "none",
+          width: "320px",
+          height: "240px",
+          border: "2px solid #ccc",
+          borderRadius: "8px",
+        }}
+      />
+      <div className="button-container">
+        <button onClick={toggleCamera} className="toggle-button">
+          Flip Camera
+        </button>
+        <button onClick={capturePhotoAndLocation} className="capture-button">
+          Capture
+        </button>
+      </div>
       {editedPhoto && (
-        <div>
-          <img src={editedPhoto} alt="Foto Karyawan yang diedit" />
+        <div className="result-container">
+          <img
+            src={editedPhoto}
+            alt="Foto Karyawan yang diedit"
+            style={{ transform: "none" }}
+          />
+          <button onClick={handleSubmit} className="submit-button">
+            Kirim Data
+          </button>
         </div>
       )}
       {location.lat && location.long && editedPhoto && (
         <div>
-          <p>Latitude: {location.lat}</p>
-          <p>Longitude: {location.long}</p>
-          <button onClick={handleSubmit}>Kirim Data</button>
+          <p>
+            Lokasi Anda: {location.lat}, {location.long}
+          </p>
+          <p>Tanggal: {formattedDate}</p>
+          <p>Jam: {formattedTime}</p>
         </div>
       )}
     </div>
